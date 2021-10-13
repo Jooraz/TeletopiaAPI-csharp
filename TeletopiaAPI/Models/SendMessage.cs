@@ -14,6 +14,7 @@ namespace TeletopiaAPI.Models
     {
         public string ClientRef { get; set; }
         public string Tag { get; set; }
+        public string Sender { get; set; }
         public SenderType SenderType { get; set; }
         /// <summary>
         /// 0-9, A-Za-z, &, #, ! characters recommended only
@@ -29,9 +30,9 @@ namespace TeletopiaAPI.Models
         /// <example>2015-11-27T22:54:33.231Z</example>
         /// <example>2015-11-27T22:54:33.231+01:00</example>
         public string SendTime { get; set; }
-        public int RequestDlr { get; set; }
-        public int Price { get; set; }
-        public int AgeLimit { get; set; }
+        public int? RequestDlr { get; set; }
+        public int? Price { get; set; }
+        public int? AgeLimit { get; set; }
 
         public SendMessageText ContentText { get; set; }
         public SendMessageTextSMS ContentSmsText { get; set; }

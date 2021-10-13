@@ -6,17 +6,23 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
+using System.IO;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Xml;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace TeletopiaAPI
 {
     public class SenderService
     {
-        private const string MAIN_URL = "teletopiasms.no";
+        private const string MAIN_URL = "teletopiasms.no/gateway/v3/json";
 
         public readonly string[] API_URLS = new string[] {
-            "api1." + MAIN_URL,
-            "api2." + MAIN_URL,
-            "api3." + MAIN_URL
+            "https://api1." + MAIN_URL,
+            "https://api2." + MAIN_URL,
+            "https://api3." + MAIN_URL
         };
 
         private HttpClient _client;
@@ -34,7 +40,7 @@ namespace TeletopiaAPI
             _userPass = userPass;
         }
 
-        public async Task<SendResponse> SendMessage(SendMessage message)
+        public async Task<SendResponsesArray> SendMessage(SendMessage message)
         {
             if (message.Auth is null)
             {
@@ -50,15 +56,30 @@ namespace TeletopiaAPI
                 var req = new HttpRequestMessage(HttpMethod.Post, url);
                 try
                 {
-                    var result = await _client.SendAsync(req);
-
-                    if (result.IsSuccessStatusCode && result.StatusCode == HttpStatusCode.OK)
+                    HttpResponseMessage result = null;
+                    using (var ms = new MemoryStream())
                     {
-                        return await result.Content.ReadFromJsonAsync<SendResponse>();
+                        req.Content = await CreateHttpContent(message, ms);
+                        result = await _client.SendAsync(req);
                     }
-                    else if (result.StatusCode == HttpStatusCode.RequestTimeout)
+
+                    if (result != null)
                     {
-                        continue;
+                        if (result.IsSuccessStatusCode && result.StatusCode == HttpStatusCode.OK)
+                        {
+                            var options = new JsonSerializerOptions()
+                            {
+                                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                                PropertyNameCaseInsensitive = true
+                            };
+                            options.Converters.Add(new LongToBooleanConverter());
+                            var outputData = await result.Content.ReadFromJsonAsync<SendResponsesArray>(options);
+                            return outputData;
+                        }
+                        else if (result.StatusCode == HttpStatusCode.RequestTimeout)
+                        {
+                            continue;
+                        }
                     }
                 }
                 catch (OperationCanceledException) //actually TimeoutException
@@ -70,10 +91,68 @@ namespace TeletopiaAPI
                 {
                     _logger.LogError(hre.Message);
                 }
+                catch (Exception ex)
+                {
+                    var x = ex;
+                }
             }
 
             _logger.LogError("Failed to send SMS");
             return null;
+        }
+
+        private static async Task<HttpContent> CreateHttpContent(object content, Stream stream)
+        {
+            HttpContent httpContent = null;
+
+            if (content != null)
+            {
+                var options = new JsonSerializerOptions()
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+
+                await JsonSerializer.SerializeAsync(stream, content, content.GetType(), options);
+                stream.Position = 0;
+                httpContent = new StreamContent(stream);
+                httpContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
+
+                var data = JsonSerializer.Serialize(content, options);
+            }
+
+            return httpContent;
+        }
+    }
+
+    public class LongToBooleanConverter : JsonConverter<bool>
+    {
+        public override bool Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            switch (reader.TokenType)
+            {
+                case JsonTokenType.Number:
+                    {
+                        var stringValue = reader.GetInt64();
+                        return stringValue == 1;
+                    }
+                case JsonTokenType.String:
+                    {
+                        var stringValue = reader.GetString();
+                        bool output;
+                        if (bool.TryParse(stringValue, out output))
+                        {
+                            return output;
+                        }
+                    }
+                    break;
+            }
+
+            return reader.GetBoolean();
+        }
+
+        public override void Write(Utf8JsonWriter writer, bool value, JsonSerializerOptions options)
+        {
+            writer.WriteBooleanValue(value);
         }
     }
 }

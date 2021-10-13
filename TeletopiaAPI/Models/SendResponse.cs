@@ -1,5 +1,10 @@
 ﻿namespace TeletopiaAPI.Models
 {
+    public class SendResponsesArray
+    {
+        public SendResponse[] Responses { get; set; }
+    }
+
     public class SendResponse
     {
         public bool Accepted { get; set; }
