@@ -116,8 +116,6 @@ namespace TeletopiaAPI
                 stream.Position = 0;
                 httpContent = new StreamContent(stream);
                 httpContent.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-                var data = JsonSerializer.Serialize(content, options);
             }
 
             return httpContent;
